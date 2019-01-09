@@ -15,15 +15,24 @@ return [
     'components' => [
         'request' => [
             'csrfParam' => '_csrf-backend',
+            'cookieValidationKey' => $params['cookieValidationKey'],
         ],
         'user' => [
             'identityClass' => 'common\models\User',
             'enableAutoLogin' => true,
-            'identityCookie' => ['name' => '_identity-backend', 'httpOnly' => true],
+            'identityCookie' => [
+                'name' => '_identity',
+                'httpOnly' => true,
+                'domain' => $params['cookieDomain'],
+            ],
         ],
         'session' => [
             // this is the name of the session cookie used for login on the backend
-            'name' => 'advanced-backend',
+            'name' => '_session',
+            'cookieParams' => [
+                'domain' => $params['cookieDomain'],
+                'httpOnly' => true,
+            ]
         ],
         'log' => [
             'traceLevel' => YII_DEBUG ? 3 : 0,
@@ -38,19 +47,27 @@ return [
             'errorAction' => 'site/error',
         ],
 
-        'urlManager' => [
+        'backendUrlManager' => require __DIR__ . './urlManager.php',
+        'frontendUrlManager' => require __DIR__ . '/../../frontend/config/urlManager.php',
+        'urlManager' => function () {
+                return Yii::$app->get('backendUrlManager');
+        },
+           /* [
             'enablePrettyUrl' => true,
             'showScriptName' => false,
             'rules' => [
+                '' => 'site/index',
+                '<controller:\w+>/<action:\w+>/' => '<controller>/<action>',
+                '_a:login|logout' => 'site/<_a>',
             ],
-        ],
+        ],*/
     ],
 
     'as access' => [
         'class' => 'yii\filters\AccessControl', // AccessControl::className(),
         'except' => [
             'site/login',
-            'site/error'
+            'site/error',
         ],
         'rules' => [
             /*[
@@ -63,6 +80,7 @@ return [
                 'allow' => true,
                 'roles' => ['@'],
             ],
+
         ],
     ],
     'params' => $params,
