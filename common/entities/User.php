@@ -38,6 +38,23 @@ class User extends ActiveRecord implements IdentityInterface
         return $user;
     }
 
+    public function requestPasswordReset(): void
+    {
+        if (!empty($this->password_reset_token) && self::isPasswordResetTokenValid($this->password_reset_token)) {
+            throw new \DomainException('Уже был запрос восстановления пароля.');
+        }
+        $this->password_reset_token = Yii::$app->security->generateRandomString() . '_' . time();
+    }
+
+    public function resetPassword($password): void
+    {
+        if (empty($this->password_reset_token)) {
+            throw new \DomainException('Восстановление пароля не запрашивалось.');
+        }
+        $this->setPassword($password);
+        $this->password_reset_token = null;
+    }
+
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;
