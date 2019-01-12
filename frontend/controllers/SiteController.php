@@ -1,17 +1,19 @@
 <?php
 namespace frontend\controllers;
 
+use frontend\services\auth\PasswordResetService;
+use frontend\services\auth\SignupService;
 use Yii;
 use yii\base\InvalidParamException;
 use yii\web\BadRequestHttpException;
 use yii\web\Controller;
 use yii\filters\VerbFilter;
 use yii\filters\AccessControl;
-use common\models\LoginForm;
-use frontend\models\PasswordResetRequestForm;
-use frontend\models\ResetPasswordForm;
-use frontend\models\SignupForm;
-use frontend\models\ContactForm;
+use common\forms\LoginForm;
+use frontend\forms\PasswordResetRequestForm;
+use frontend\forms\ResetPasswordForm;
+use frontend\forms\SignupForm;
+use frontend\forms\ContactForm;
 
 /**
  * Site controller
@@ -150,8 +152,18 @@ class SiteController extends Controller
      */
     public function actionSignup()
     {
-        $model = new SignupForm();
-        if ($model->load(Yii::$app->request->post())) {
+        $form = new SignupForm();
+        if ($form->load(Yii::$app->request->post()) && ($form->validate())) {
+            $user = (new SignupService())->signup($form);
+            if (Yii::$app->getUser()->login($user)) {
+                return $this->goHome();
+            }
+        }
+
+        return $this->render('signup', [
+            'model' => $form,
+        ]);
+        /*if ($model->load(Yii::$app->request->post())) {
             if ($user = $model->signup()) {
                 if (Yii::$app->getUser()->login($user)) {
                     return $this->goHome();
@@ -161,7 +173,7 @@ class SiteController extends Controller
 
         return $this->render('signup', [
             'model' => $model,
-        ]);
+        ]);*/
     }
 
     /**
@@ -196,11 +208,37 @@ class SiteController extends Controller
      */
     public function actionResetPassword($token)
     {
+        $service = new PasswordResetService();
+
         try {
+            $service->validateToken($token);
+        } catch (\DomainException $e) {
+            throw new BadRequestHttpException($e->getMessage());
+        }
+
+        $form = new ResetPasswordForm();
+        if ($form->load(Yii::$app->request->post()) && $form->validate()) {
+            try {
+                (new PasswordResetService())->reset($token, $form);
+                Yii::$app->session->setFlash('success', 'Новый пароль установлен.');
+                return $this->goHome();
+            } catch (\DomainException $e) {
+                Yii::$app->errorHandler->logException($e);
+                Yii::$app->session->setFlash('error', $e->getMessage());
+            }
+
+        }
+
+        return $this->render('resetPassword', [
+            'model' => $form,
+            ]);
+       /* try {
             $model = new ResetPasswordForm($token);
         } catch (InvalidParamException $e) {
             throw new BadRequestHttpException($e->getMessage());
         }
+
+
 
         if ($model->load(Yii::$app->request->post()) && $model->validate() && $model->resetPassword()) {
             Yii::$app->session->setFlash('success', 'New password saved.');
@@ -210,6 +248,6 @@ class SiteController extends Controller
 
         return $this->render('resetPassword', [
             'model' => $model,
-        ]);
+        ]);*/
     }
 }

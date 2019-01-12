@@ -1,9 +1,9 @@
 <?php
-namespace frontend\models;
+namespace frontend\forms;
 
 use Yii;
 use yii\base\Model;
-use common\models\User;
+use common\entities\User;
 
 /**
  * Password reset request form
@@ -35,9 +35,9 @@ class PasswordResetRequestForm extends Model
      *
      * @return bool whether the email was send
      */
-    public function sendEmail()
+   /* public function sendEmail()
     {
-        /* @var $user User */
+        /* @var $user User
         $user = User::findOne([
             'status' => User::STATUS_ACTIVE,
             'email' => $this->email,
@@ -64,5 +64,5 @@ class PasswordResetRequestForm extends Model
             ->setTo($this->email)
             ->setSubject('Password reset for ' . Yii::$app->name)
             ->send();
-    }
+    }*/
 }
