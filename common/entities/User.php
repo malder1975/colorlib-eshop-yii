@@ -15,15 +15,17 @@ use yii\web\IdentityInterface;
  * @property string $password_hash
  * @property string $password_reset_token
  * @property string $email
+ * @property string $email_confirm_token
  * @property string $auth_key
  * @property integer $status
  * @property integer $created_at
  * @property integer $updated_at
  * @property string $password write-only password
+ *
  */
 class User extends ActiveRecord implements IdentityInterface
 {
-    const STATUS_DELETED = 0;
+    const STATUS_WAIT = 0;
     const STATUS_ACTIVE = 10;
 
     public static function signup(string $username, string $email, string $password): self
@@ -33,9 +35,19 @@ class User extends ActiveRecord implements IdentityInterface
         $user->email = $email;
         $user->SetPassword($password);
         $user->created_at = time();
-        $user->status = self::STATUS_ACTIVE;
+        $user->status = self::STATUS_WAIT;
+        $user->generateEmailConfirmToken();  //email_confirm_token = Yii::$app->security->generateRandomString();
         $user->generateAuthKey();
         return $user;
+    }
+
+    public function confirmSignup()
+    {
+        if ($this->isWait()) {
+            throw new \DomainException('Пользователь уже активирован.');
+        }
+        $this->status = self::STATUS_ACTIVE;
+        $this->email_confirm_token = null;
     }
 
     public function requestPasswordReset(): void
@@ -53,6 +65,11 @@ class User extends ActiveRecord implements IdentityInterface
         }
         $this->setPassword($password);
         $this->password_reset_token = null;
+    }
+
+    public function isWait(): bool
+    {
+        return $this->status === self::STATUS_WAIT;
     }
 
     public function isActive(): bool
@@ -86,7 +103,7 @@ class User extends ActiveRecord implements IdentityInterface
     {
         return [
             ['status', 'default', 'value' => self::STATUS_ACTIVE],
-            ['status', 'in', 'range' => [self::STATUS_ACTIVE, self::STATUS_DELETED]],
+            ['status', 'in', 'range' => [self::STATUS_ACTIVE, self::STATUS_WAIT]],
         ];
     }
 
@@ -192,7 +209,7 @@ class User extends ActiveRecord implements IdentityInterface
      *
      * @param string $password
      */
-    public function setPassword($password)
+    private function setPassword($password)
     {
         $this->password_hash = Yii::$app->security->generatePasswordHash($password);
     }
@@ -200,7 +217,7 @@ class User extends ActiveRecord implements IdentityInterface
     /**
      * Generates "remember me" authentication key
      */
-    public function generateAuthKey()
+    private function generateAuthKey()
     {
         $this->auth_key = Yii::$app->security->generateRandomString();
     }
@@ -208,7 +225,7 @@ class User extends ActiveRecord implements IdentityInterface
     /**
      * Generates new password reset token
      */
-    public function generatePasswordResetToken()
+    private function generatePasswordResetToken()
     {
         $this->password_reset_token = Yii::$app->security->generateRandomString() . '_' . time();
     }
@@ -216,8 +233,21 @@ class User extends ActiveRecord implements IdentityInterface
     /**
      * Removes password reset token
      */
-    public function removePasswordResetToken()
+    private function removePasswordResetToken()
     {
         $this->password_reset_token = null;
+    }
+
+    /**
+     * @Generates new Email Confirm Token
+     */
+    private function generateEmailConfirmToken()
+    {
+        $this->email_confirm_token = Yii::$app->security->generateRandomString();
+    }
+
+    private function removeEmailConfirmToken()
+    {
+        $this->email_confirm_token = null;
     }
 }

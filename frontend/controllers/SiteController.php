@@ -3,6 +3,7 @@ namespace frontend\controllers;
 
 use frontend\services\auth\PasswordResetService;
 use frontend\services\auth\SignupService;
+use frontend\services\ContactService;
 use Yii;
 use yii\base\InvalidParamException;
 use yii\web\BadRequestHttpException;
@@ -20,6 +21,19 @@ use frontend\forms\ContactForm;
  */
 class SiteController extends Controller
 {
+
+    private $passwordResetService;
+    private $contactService;
+    private $signupService;
+
+    public function __construct($id, $module, PasswordResetService $passwordResetService, ContactService $contactService, SignupService $signupService, array $config = [])
+    {
+        parent::__construct($id, $module, $config);
+        $this->passwordResetService = $passwordResetService;
+        $this->contactService = $contactService;
+        $this->signupService = $signupService;
+    }
+
     /**
      * {@inheritdoc}
      */
@@ -119,20 +133,21 @@ class SiteController extends Controller
      */
     public function actionContact()
     {
-        $model = new ContactForm();
-        if ($model->load(Yii::$app->request->post()) && $model->validate()) {
-            if ($model->sendEmail(Yii::$app->params['adminEmail'])) {
-                Yii::$app->session->setFlash('success', 'Thank you for contacting us. We will respond to you as soon as possible.');
-            } else {
-                Yii::$app->session->setFlash('error', 'There was an error sending your message.');
+        $form = new ContactForm();
+        if ($form->load(Yii::$app->request->post()) && $form->validate()) {
+            try {
+                $this->contactService->send($form);
+                Yii::$app->session->setFlash('success', 'Спасибо за отправку нам сообщения. Мы свяжемся с вами в ближайшее время.');
+                return $this->goHome();
+            } catch (\Exception $e) {
+                Yii::$app->errorHandler->logException($e);
+                Yii::$app->session->setFlash('error', 'Ошибка отправки сообщения.');
             }
-
             return $this->refresh();
-        } else {
-            return $this->render('contact', [
-                'model' => $model,
-            ]);
         }
+            return $this->render('contact', [
+                'model' => $form,
+            ]);
     }
 
     /**
@@ -154,26 +169,31 @@ class SiteController extends Controller
     {
         $form = new SignupForm();
         if ($form->load(Yii::$app->request->post()) && ($form->validate())) {
-            $user = (new SignupService())->signup($form);
-            if (Yii::$app->getUser()->login($user)) {
+            try {
+                $this->signupService->signup($form);
+                Yii::$app->session->setFlash('success', 'Проверьте Ваш Email для дальнейших инструкций.');
                 return $this->goHome();
+            } catch (\DomainException $e) {
+                Yii::$app->errorHandler->logException($e);
+                Yii::$app->session->setFlash('error', $e->getMessage());
             }
         }
 
         return $this->render('signup', [
             'model' => $form,
         ]);
-        /*if ($model->load(Yii::$app->request->post())) {
-            if ($user = $model->signup()) {
-                if (Yii::$app->getUser()->login($user)) {
-                    return $this->goHome();
-                }
-            }
-        }
+    }
 
-        return $this->render('signup', [
-            'model' => $model,
-        ]);*/
+    public function actionConfirm($token) {
+        try {
+            $this->signupService->confirm($token);
+            Yii::$app->session->setFlash('success', 'Email адрес успешно подтвержден.');
+            return $this->redirect(['login']);
+        } catch (\DomainException $e) {
+            Yii::$app->errorHandler->logException($e);
+            Yii::$app->session->setFlash('error', $e->getMessage());
+            return $this->goHome();
+        }
     }
 
     /**
@@ -183,19 +203,21 @@ class SiteController extends Controller
      */
     public function actionRequestPasswordReset()
     {
-        $model = new PasswordResetRequestForm();
-        if ($model->load(Yii::$app->request->post()) && $model->validate()) {
-            if ($model->sendEmail()) {
-                Yii::$app->session->setFlash('success', 'Check your email for further instructions.');
+        $form = new PasswordResetRequestForm();
+        if ($form->load(Yii::$app->request->post()) && $form->validate()) {
 
+            try {
+                $this->passwordResetService->request($form);
+                Yii::$app->session->setFlash('success', 'Проверьте Ваш Email для дальнейших инструкций.');
                 return $this->goHome();
-            } else {
-                Yii::$app->session->setFlash('error', 'Sorry, we are unable to reset password for the provided email address.');
+            } catch (\DomainException $e) {
+                Yii::$app->errorHandler->logException($e);
+                Yii::$app->session->setFlash('error', $e->getMessage());
             }
         }
 
         return $this->render('requestPasswordResetToken', [
-            'model' => $model,
+            'model' => $form,
         ]);
     }
 
@@ -208,10 +230,10 @@ class SiteController extends Controller
      */
     public function actionResetPassword($token)
     {
-        $service = new PasswordResetService();
+       // $service = Yii::$container->get(PasswordResetService::class);
 
         try {
-            $service->validateToken($token);
+            $this->passwordResetService->validateToken($token);
         } catch (\DomainException $e) {
             throw new BadRequestHttpException($e->getMessage());
         }
@@ -219,7 +241,7 @@ class SiteController extends Controller
         $form = new ResetPasswordForm();
         if ($form->load(Yii::$app->request->post()) && $form->validate()) {
             try {
-                (new PasswordResetService())->reset($token, $form);
+                $this->passwordResetService->reset($token, $form);
                 Yii::$app->session->setFlash('success', 'Новый пароль установлен.');
                 return $this->goHome();
             } catch (\DomainException $e) {

@@ -12,10 +12,21 @@ namespace frontend\services\auth;
 use common\entities\User;
 use frontend\forms\PasswordResetRequestForm;
 use frontend\forms\ResetPasswordForm;
+use Yii;
+use yii\mail\MailerInterface;
 use http\Exception\RuntimeException;
 
 class PasswordResetService
 {
+    //private $supportEmail;
+    private $mailer;
+
+    public function __construct( MailerInterface $mailer)
+    {
+        //$this->supportEmail = $supportEmail;
+        $this->mailer = $mailer;
+    }
+
     public function request(PasswordResetRequestForm $form): void
     {
         $user = User::findOne([
@@ -33,13 +44,12 @@ class PasswordResetService
             throw new \RuntimeException('Ошибка сохраниения!');
         }
 
-        $sent = \Yii::$app
+        $sent = $this
             ->mailer
             ->compose(
                 ['html' => 'passwordResetToken-html', 'text' => 'passwordResetToken-text'],
                 ['user' => $user]
             )
-            ->setFrom([\Yii::$app->params['supportEmail'] => \Yii::$app->name . 'robot'])
             ->setTo($user->email)
             ->setSubject('Восстановление пароля для' . \Yii::$app->name)
             ->send();
